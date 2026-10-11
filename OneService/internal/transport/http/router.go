@@ -9,13 +9,15 @@ type Router struct {
 	uh *handler.UserHandler
 }
 
-func NewRouter(handler *handler.UserHandler) *Router {
-	return &Router{uh: handler}
-}
-func (router *Router) RegisterRoutes(r chi.Router) {
+func NewRouter(handler *handler.UserHandler) *chi.Mux {
+	r := chi.NewRouter()
+	router := Router{uh: handler}
+
 	r.Post("/jwt/{id}", router.uh.CreateAuthToken)
 	r.Route("/users", func(r chi.Router) {
 		r.Post("/", router.uh.CreateUser)
 		r.Get("/{id}", router.uh.GetUser)
 	})
+
+	return r
 }
