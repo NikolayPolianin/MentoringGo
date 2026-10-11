@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+option go_package = "/proto";
+
+message CreateUserRequest{
+  string name = 1;
+  int32 age = 2;
+  string dateBorn = 3;
+}
+
+message CreateUserResponse{
+  int64 id = 1;
+}
+
+message GetUserRequest{
+  int64 id = 1;
+}
+message GetUserResponse{
+  int64 id = 1;
+  string name = 2;
+  string dateBorn = 3;
+  string localDate = 4;
+}
+
+service userService{
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+}
+
+

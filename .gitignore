@@ -1,0 +1,26 @@
+# Binaries
+/bin/
+/dist/
+*.exe
+*.out
+*.test
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test and coverage
+coverage.out
+coverage.html
