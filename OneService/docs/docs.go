@@ -79,7 +79,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/OneService.User"
+                            "$ref": "#/definitions/domain.User"
                         }
                     }
                 ],
@@ -87,7 +87,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/OneService.User"
+                            "$ref": "#/definitions/domain.User"
                         }
                     },
                     "400": {
@@ -136,7 +136,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/OneService.User"
+                            "$ref": "#/definitions/domain.User"
                         }
                     },
                     "400": {
@@ -156,7 +156,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "OneService.User": {
+        "domain.User": {
             "type": "object",
             "properties": {
                 "age": {
@@ -166,16 +166,12 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "id": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 },
                 "localDate": {
                     "type": "string"
                 },
                 "name": {
-                    "type": "string"
-                },
-                "uuid": {
                     "type": "string"
                 }
             }

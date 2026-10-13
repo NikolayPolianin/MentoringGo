@@ -32,8 +32,8 @@ func NewUserHandler(useCase UseCase) *UserHandler {
 // @Tags users
 // @Accept json
 // @Produce json
-// @Param user body User true "User"
-// @Success 200 {object} User
+// @Param user body domain.User true "User"
+// @Success 200 {object} domain.User
 // @Failure 400 {string} string
 // @Failure 500 {string} string
 // @Router /api/v1/users [post]
@@ -64,7 +64,7 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 // @in header
 // @name Authorization
 // @Param id path int true "ID пользователя"
-// @Success 200 {object} User
+// @Success 200 {object} domain.User
 // @Failure 400 {string} string
 // @Failure 500 {string} string
 // @Router /api/v1/users/{id} [get]
