@@ -1,9 +1,8 @@
-package kafka
+package consumer
 
 import (
-	"checkgo/TwoService/internal/domain"
+	"checkgo/TwoService/internal/use_case"
 	"context"
-	"encoding/json"
 	"github.com/IBM/sarama"
 	"log/slog"
 	"time"
@@ -12,13 +11,14 @@ import (
 type Consumer struct {
 	group sarama.ConsumerGroup
 }
-type ConsumerHandler struct{}
+type ConsumerHandler struct {
+	uc *use_case.InboxUseCase
+}
 
 func NewConsumer() *Consumer {
 	config := sarama.NewConfig()
 	config.Consumer.Retry.Max = 3
 	config.Consumer.Return.Errors = true
-	config.Consumer.Offsets.AutoCommit.Enable = false
 
 	consumer, err := sarama.NewConsumerGroup([]string{"localhost:9092", "localhost:9093"}, "user-service", config)
 	if err != nil {
@@ -36,31 +36,37 @@ func (h *ConsumerHandler) Cleanup(session sarama.ConsumerGroupSession) error {
 }
 func (h *ConsumerHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for message := range claim.Messages() {
-		var user domain.User
-		if err := json.Unmarshal(message.Value, &user); err != nil {
-			slog.Error("Error unmarshalling message:", err)
+		if err := h.uc.ReadAndWriteInbox(context.Background(), message); err != nil {
+			session.MarkMessage(message, "")
+			return err
 		}
-		if err := json.Unmarshal(message.Key, &user.UuID); err != nil {
-			slog.Error("Error unmarshalling Key:", err)
-		}
-		slog.Info("Message claimed:",
-			"Topic:", message.Topic,
-			"User:", user)
+		session.MarkMessage(message, "")
+		slog.Info(
+			"processing Kafka message",
+			"topic", message.Topic,
+			"partition", message.Partition,
+			"offset", message.Offset,
+			"key", string(message.Key),
+		)
 	}
 	return nil
 }
-func (c *Consumer) Run(ctx context.Context) error {
-	handler := &ConsumerHandler{}
+func (c *Consumer) Run(ctx context.Context, uc *use_case.InboxUseCase) error {
+	handler := &ConsumerHandler{uc}
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		err := c.group.Consume(ctx, []string{"user-create", "user-skip"}, handler)
 		if err != nil {
-			slog.Error("Error from consumer:", err)
+			slog.Error("Error from consumer:", "err", err)
 			return err
 		}
-		slog.Info("Consumer successfully initiated")
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Second * 10):
+		}
 	}
 }
 func (c *Consumer) Close() {
