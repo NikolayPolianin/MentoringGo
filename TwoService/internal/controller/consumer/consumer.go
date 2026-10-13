@@ -3,6 +3,7 @@ package consumer
 import (
 	"checkgo/TwoService/internal/use_case"
 	"context"
+	"fmt"
 	"github.com/IBM/sarama"
 	"log/slog"
 	"time"
@@ -35,21 +36,44 @@ func (h *ConsumerHandler) Cleanup(session sarama.ConsumerGroupSession) error {
 	return nil
 }
 func (h *ConsumerHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	for message := range claim.Messages() {
-		if err := h.uc.ReadAndWriteInbox(context.Background(), message); err != nil {
+	for {
+		select {
+		case <-session.Context().Done():
+			return nil
+		case message, ok := <-claim.Messages():
+			if !ok {
+				return nil
+			}
+			if err := h.uc.ReadAndWriteInbox(
+				session.Context(),
+				message,
+			); err != nil {
+				slog.Error(
+					"failed to process Kafka message",
+					"topic", message.Topic,
+					"partition", message.Partition,
+					"offset", message.Offset,
+					"key", string(message.Key),
+					"error", err,
+				)
+				return fmt.Errorf(
+					"process topic %s partition %d offset %d: %w",
+					message.Topic,
+					message.Partition,
+					message.Offset,
+					err,
+				)
+			}
+
 			session.MarkMessage(message, "")
-			return err
+			slog.Info(
+				"Kafka message processed",
+				"topic", message.Topic,
+				"partition", message.Partition,
+				"offset", message.Offset,
+			)
 		}
-		session.MarkMessage(message, "")
-		slog.Info(
-			"processing Kafka message",
-			"topic", message.Topic,
-			"partition", message.Partition,
-			"offset", message.Offset,
-			"key", string(message.Key),
-		)
 	}
-	return nil
 }
 func (c *Consumer) Run(ctx context.Context, uc *use_case.InboxUseCase) error {
 	handler := &ConsumerHandler{uc}
