@@ -5,14 +5,14 @@ import (
 	"checkgo/OneService/internal/adapter/kafka"
 	"checkgo/OneService/internal/adapter/postgres"
 	"checkgo/OneService/internal/adapter/redis"
+	grpc2 "checkgo/OneService/internal/controller/grpc"
+	"checkgo/OneService/internal/controller/worker"
 	"checkgo/OneService/internal/http_server"
-	grpc2 "checkgo/OneService/internal/ports/grpc"
 	http2 "checkgo/OneService/internal/transport/http"
 	"checkgo/OneService/internal/transport/http/handler"
 	"checkgo/OneService/internal/use_case"
 	"checkgo/proto"
 	"context"
-	"github.com/go-chi/chi/v5"
 	httpSwagger "github.com/swaggo/http-swagger"
 	grpcServer "google.golang.org/grpc"
 	"log/slog"
@@ -40,13 +40,22 @@ func Run(ctx context.Context) {
 		slog.Error("Failed to create producer", err.Error())
 	}
 
+	outboxCfg := worker.NewOutboxConfig(3)
+
 	useCase := use_case.NewUseCase(pg, producer, cache)
 	hu := handler.NewUserHandler(useCase)
 	userRouter := http2.NewRouter(hu)
-	r := chi.NewRouter()
-	r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("http://localhost:8080/swagger/doc.json")))
+
+	userRouter.Get("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("http://localhost:8080/swagger/doc.json"),
+	))
+	outboxRunner := worker.NewOutboxKafka(useCase, *outboxCfg)
 
 	server := http_server.StartHttpServer(userRouter)
+
+	if err = outboxRunner.Run(ctx); err != nil {
+		slog.Error("Failed to start outbox", err.Error())
+	}
 
 	lst, err := net.Listen("tcp", ":50051")
 	if err != nil {
@@ -64,6 +73,7 @@ func Run(ctx context.Context) {
 	signal.Notify(ch, os.Interrupt)
 	<-ch
 
+	outboxRunner.Stop()
 	server.Stop()
 	pg.Close()
 	cache.Close()

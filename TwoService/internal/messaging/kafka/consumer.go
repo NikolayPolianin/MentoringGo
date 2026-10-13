@@ -35,16 +35,13 @@ func (h *ConsumerHandler) Cleanup(session sarama.ConsumerGroupSession) error {
 	return nil
 }
 func (h *ConsumerHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	slog.Info(
-		"consume claim started",
-		"topic", claim.Topic(),
-		"partition", claim.Partition(),
-		"initial_offset", claim.InitialOffset(),
-	)
 	for message := range claim.Messages() {
 		var user domain.User
 		if err := json.Unmarshal(message.Value, &user); err != nil {
 			slog.Error("Error unmarshalling message:", err)
+		}
+		if err := json.Unmarshal(message.Key, &user.UuID); err != nil {
+			slog.Error("Error unmarshalling Key:", err)
 		}
 		slog.Info("Message claimed:",
 			"Topic:", message.Topic,

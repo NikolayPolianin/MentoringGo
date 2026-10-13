@@ -1,6 +1,7 @@
 package kafka
 
 import (
+	"checkgo/OneService/internal/domain"
 	"context"
 	"github.com/IBM/sarama"
 	"log/slog"
@@ -33,18 +34,19 @@ func (p *Producer) Close() {
 	}
 }
 
-func (p *Producer) SendMessage(message *sarama.ProducerMessage) error {
-	partition, offset, _ := p.producer.SendMessage(message)
-	value, err := message.Value.Encode()
-	if err != nil {
-		slog.Error("failed to encode message value", "err", err)
-		return err
+func (p *Producer) SendMessage(ctx context.Context, events ...*domain.Event) error {
+	for _, event := range events {
+
+		if event == nil {
+			continue
+		}
+		msg := sarama.ProducerMessage{
+			Topic: event.Topic,
+			Key:   sarama.StringEncoder(event.Key),
+			Value: sarama.StringEncoder(event.Value),
+		}
+		part, off, _ := p.producer.SendMessage(&msg)
+		slog.Info("IN:", part, off)
 	}
-	slog.Info("message sent",
-		"topic", message.Topic,
-		"key", message.Key,
-		"value", string(value),
-		"in partition: ", partition,
-		"WithOffset", offset)
 	return nil
 }

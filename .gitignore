@@ -4,6 +4,7 @@
 *.exe
 *.out
 *.test
+/AlgoSecret
 
 # Environment and secrets
 .env

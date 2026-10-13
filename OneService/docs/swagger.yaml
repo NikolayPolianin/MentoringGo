@@ -1,18 +1,15 @@
 definitions:
-  OneService.User:
+  domain.User:
     properties:
       age:
         type: integer
       birthday:
         type: string
       id:
-        format: int64
         type: integer
       localDate:
         type: string
       name:
-        type: string
-      uuid:
         type: string
     type: object
 info:
@@ -58,14 +55,14 @@ paths:
         name: user
         required: true
         schema:
-          $ref: '#/definitions/OneService.User'
+          $ref: '#/definitions/domain.User'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/OneService.User'
+            $ref: '#/definitions/domain.User'
         "400":
           description: Bad Request
           schema:
@@ -94,7 +91,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/OneService.User'
+            $ref: '#/definitions/domain.User'
         "400":
           description: Bad Request
           schema:

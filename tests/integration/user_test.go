@@ -2,6 +2,8 @@ package integration
 
 import (
 	"bytes"
+	http2 "checkgo/OneService/internal/transport/http"
+	"checkgo/tests/integration/helper"
 	"context"
 	"encoding/json"
 	"github.com/go-chi/chi/v5"
@@ -18,13 +20,12 @@ import (
 )
 
 func TestCreateUser(t *testing.T) {
-	testDate := domain.User{
-		Name:      "Test User",
-		Age:       22,
-		Birthday:  "2000-01-01",
-		LocalDate: time.Now(),
-	}
-	data, err := json.Marshal(testDate)
+	test := helper.UserCreate("Test User",
+		22,
+		"2000-01-01",
+		time.Duration(time.Now().Unix()),
+	)
+	data, err := json.Marshal(test)
 	server := NewIntegrationTestServer(t)
 	defer server.Close()
 

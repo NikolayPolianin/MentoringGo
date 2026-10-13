@@ -5,22 +5,25 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/IBM/sarama"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"log/slog"
 	"strconv"
-	"time"
 )
 
 //go:generate mockgen -source=user_test.go -destination=mocks/mocks.go -package=mocks
 type Pgg interface {
 	CreateUser(ctx context.Context, user domain.User) (int64, error)
 	GetUser(ctx context.Context, id int64) (domain.User, error)
+
+	ReadOutbox(ctx context.Context, limit int) ([]*domain.Event, error)
+	SaveOutbox(ctx context.Context, event ...domain.Event) error
+	DeleteFromOutbox(ctx context.Context) error
 }
 
 //go:generate mockgen -source=user_test.go -destination=mocks/mocks.go -package=mocks
 type Publisher interface {
-	SendMessage(message *sarama.ProducerMessage) error
+	SendMessage(ctx context.Context, events ...*domain.Event) error
 }
 
 //go:generate mockgen -source=user_test.go -destination=mocks/mocks.go -package=mocks
@@ -28,6 +31,7 @@ type Cache interface {
 	GetUser(ctx context.Context, id string) (*domain.User, error)
 	SetUser(ctx context.Context, id string, user *domain.User) error
 }
+
 type User struct {
 	db       Pgg
 	producer Publisher
@@ -44,22 +48,22 @@ func (u *User) CreateUser(ctx context.Context, user domain.User) (int64, error) 
 		slog.Error("Error creating user", "err", err)
 		return -1, err
 	}
-	valueMsg, err := json.Marshal(user)
-	if err != nil {
-		slog.Error("Error marshalling user", "err", err)
-		return -1, err
+	user.Id = userId
+	user.UuID = uuid.New()
+
+	eventKey, _ := json.Marshal(user.UuID)
+	eventValue, _ := json.Marshal(user)
+
+	event := domain.Event{
+		Topic: "user-create",
+		Key:   eventKey,
+		Value: eventValue,
 	}
 
-	msg := &sarama.ProducerMessage{
-		Topic:     "user-create",
-		Key:       sarama.StringEncoder(strconv.Itoa(int(userId))),
-		Value:     sarama.ByteEncoder(valueMsg),
-		Timestamp: time.Now(),
+	if err = u.db.SaveOutbox(ctx, event); err != nil {
+		slog.Error("Error saving event", "err", err)
 	}
-	if err := u.producer.SendMessage(msg); err != nil {
-		slog.Error("Error sending message", "err", err)
-		return -1, err
-	}
+
 	return userId, nil
 }
 

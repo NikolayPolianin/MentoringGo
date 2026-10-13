@@ -68,7 +68,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/OneService.User"
+                            "$ref": "#/definitions/domain.User"
                         }
                     }
                 ],
@@ -76,7 +76,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/OneService.User"
+                            "$ref": "#/definitions/domain.User"
                         }
                     },
                     "400": {
@@ -125,7 +125,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/OneService.User"
+                            "$ref": "#/definitions/domain.User"
                         }
                     },
                     "400": {
@@ -145,7 +145,7 @@
         }
     },
     "definitions": {
-        "OneService.User": {
+        "domain.User": {
             "type": "object",
             "properties": {
                 "age": {
@@ -155,16 +155,12 @@
                     "type": "string"
                 },
                 "id": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 },
                 "localDate": {
                     "type": "string"
                 },
                 "name": {
-                    "type": "string"
-                },
-                "uuid": {
                     "type": "string"
                 }
             }
