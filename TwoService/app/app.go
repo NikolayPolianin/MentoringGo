@@ -1,7 +1,9 @@
 package app
 
 import (
-	"checkgo/TwoService/internal/messaging/kafka"
+	"checkgo/TwoService/internal/adapter/postgres"
+	"checkgo/TwoService/internal/controller/consumer"
+	"checkgo/TwoService/internal/use_case"
 	"context"
 	"log/slog"
 	"os"
@@ -10,9 +12,12 @@ import (
 )
 
 func Run(ctx context.Context) {
-	consumer := kafka.NewConsumer()
+	pg := postgres.NewPostgres(ctx)
+	uc := use_case.NewInboxUseCase(pg)
+	consumer := consumer.NewConsumer()
+
 	go func() {
-		consumer.Run(ctx)
+		consumer.Run(ctx, uc)
 	}()
 
 	sig := make(chan os.Signal, 1)

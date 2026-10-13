@@ -40,7 +40,7 @@ func Run(ctx context.Context) {
 		slog.Error("Failed to create producer", err.Error())
 	}
 
-	outboxCfg := worker.NewOutboxConfig(3)
+	outboxCfg := worker.NewOutboxConfig(10)
 
 	useCase := use_case.NewUseCase(pg, producer, cache)
 	hu := handler.NewUserHandler(useCase)
