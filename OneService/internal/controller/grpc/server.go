@@ -5,6 +5,9 @@ import (
 	"checkgo/proto"
 	"context"
 	"encoding/json"
+	grpcServer "google.golang.org/grpc"
+	"log/slog"
+	"net"
 	"strconv"
 )
 
@@ -15,6 +18,23 @@ type UseCase interface {
 type Server struct {
 	proto.UnimplementedUserServiceServer
 	UseCase UseCase
+}
+
+func StartServer(ctx context.Context, uc UseCase) {
+	lst, err := net.Listen("tcp", ":50051")
+	if err != nil {
+		slog.Error("Failed to create listener", err.Error())
+	}
+	s := grpcServer.NewServer(
+		grpcServer.UnaryInterceptor(UnaryServerInterceptor))
+	proto.RegisterUserServiceServer(s, &Server{UseCase: uc})
+	if err := s.Serve(lst); err != nil {
+		slog.Error("Failed to start server", err.Error())
+	}
+	<-ctx.Done()
+	if err := lst.Close(); err != nil {
+		slog.Error("Failed to close listener", err.Error())
+	}
 }
 
 func (s *Server) CreateUser(ctx context.Context, req *proto.CreateUserRequest) (*proto.CreateUserResponse, error) {

@@ -11,15 +11,11 @@ import (
 	http2 "checkgo/OneService/internal/transport/http"
 	"checkgo/OneService/internal/transport/http/handler"
 	"checkgo/OneService/internal/use_case"
-	"checkgo/proto"
 	"context"
 	httpSwagger "github.com/swaggo/http-swagger"
-	grpcServer "google.golang.org/grpc"
 	"log/slog"
-	"net"
 	"os"
 	"os/signal"
-	"time"
 )
 
 // @securityDefinitions.apikey BearerAuth
@@ -34,6 +30,7 @@ func Run(ctx context.Context) {
 	pg := postgres.NewPostgres(ctx)
 	pg.CreateTable(ctx)
 	cache := redis.NewRedisClient()
+	tx := postgres.NewTxManager(pg.Pool)
 
 	producer, err := kafka.NewProducer()
 	if err != nil {
@@ -42,31 +39,20 @@ func Run(ctx context.Context) {
 
 	outboxCfg := worker.NewOutboxConfig(10)
 
-	useCase := use_case.NewUseCase(pg, producer, cache)
+	useCase := use_case.NewUseCase(pg, producer, cache, tx)
 	hu := handler.NewUserHandler(useCase)
 	userRouter := http2.NewRouter(hu)
+	outboxRunner := worker.NewOutboxKafka(useCase, *outboxCfg)
 
 	userRouter.Get("/swagger/*", httpSwagger.Handler(
 		httpSwagger.URL("http://localhost:8080/swagger/doc.json"),
 	))
-	outboxRunner := worker.NewOutboxKafka(useCase, *outboxCfg)
 
-	server := http_server.StartHttpServer(userRouter)
+	httpServer := http_server.StartHttpServer(userRouter)
+	go grpc2.StartServer(ctx, useCase)
 
 	if err = outboxRunner.Run(ctx); err != nil {
 		slog.Error("Failed to start outbox", err.Error())
-	}
-
-	lst, err := net.Listen("tcp", ":50051")
-	if err != nil {
-		slog.Error("Failed to create listener", err.Error())
-	}
-
-	s := grpcServer.NewServer(
-		grpcServer.UnaryInterceptor(grpc2.UnaryServerInterceptor))
-	proto.RegisterUserServiceServer(s, &grpc2.Server{UseCase: useCase})
-	if err := s.Serve(lst); err != nil {
-		slog.Error("Failed to start server", err.Error())
 	}
 
 	ch := make(chan os.Signal, 1)
@@ -74,18 +60,8 @@ func Run(ctx context.Context) {
 	<-ch
 
 	outboxRunner.Stop()
-	server.Stop()
+	httpServer.Stop()
 	pg.Close()
 	cache.Close()
 	producer.Close()
-
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		<-ctx.Done()
-		if err := lst.Close(); err != nil {
-			slog.Error("Failed to close listener", err.Error())
-		}
-	}()
-
 }
