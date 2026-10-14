@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"checkgo/OneService/internal/domain"
+	"checkgo/OneService/internal/use_case"
 	"context"
 	"errors"
 	"github.com/jackc/pgx/v5"
@@ -35,13 +36,13 @@ func (p *Pg) SaveOutbox(ctx context.Context, event ...domain.Event) error {
 	return nil
 }
 
-func (p *Pg) ReadOutbox(ctx context.Context, limit int) ([]*domain.Event, error) {
+func (p *Pg) ReadOutbox(ctx context.Context, db use_case.DBTX, limit int) ([]*domain.Event, error) {
 	sql := `SELECT topic,key,value FROM outbox
 			ORDER BY created_at DESC 
 			LIMIT $1`
 
 	events := make([]*domain.Event, 0, limit)
-	rows, err := p.Pool.Query(ctx, sql, limit)
+	rows, err := db.Query(ctx, sql, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -62,9 +63,9 @@ func (p *Pg) ReadOutbox(ctx context.Context, limit int) ([]*domain.Event, error)
 	return events, nil
 }
 
-func (p *Pg) DeleteFromOutbox(ctx context.Context) error {
+func (p *Pg) DeleteFromOutbox(ctx context.Context, db use_case.DBTX) error {
 	sql := `TRUNCATE outbox`
-	_, err := p.Pool.Exec(ctx, sql)
+	_, err := db.Exec(ctx, sql)
 	if err != nil {
 		return err
 	}

@@ -32,24 +32,25 @@ func NewOutboxKafka(uc *use_case.User, outboxConfig OutboxConfig) *OutboxKafka {
 }
 
 func (o *OutboxKafka) Run(ctx context.Context) error {
-FOR:
-	for {
-		events, err := o.uc.OutboxReadAndProduce(ctx, o.OutboxConfig.BatchSize)
-		if err != nil {
-			return err
+	go func() {
+	FOR:
+		for {
+			events, err := o.uc.OutboxReadAndProduce(ctx, o.OutboxConfig.BatchSize)
+			if err != nil {
+				slog.Error("sd", "err", err)
+			}
+			var duration time.Duration
+			if events < o.OutboxConfig.BatchSize {
+				slog.Info("events is too small - ", "count", events)
+				duration = 10 * time.Second
+			}
+			select {
+			case <-o.stop:
+				break FOR
+			case <-time.After(duration):
+			}
 		}
-
-		var duration time.Duration
-		if events < o.OutboxConfig.BatchSize {
-			slog.Info("events is too small - ", "count", events)
-			duration = 10 * time.Second
-		}
-		select {
-		case <-o.stop:
-			break FOR
-		case <-time.After(duration):
-		}
-	}
+	}()
 	return nil
 }
 func (o *OutboxKafka) Stop() {
