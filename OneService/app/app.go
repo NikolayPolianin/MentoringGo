@@ -11,8 +11,10 @@ import (
 	http2 "checkgo/OneService/internal/transport/http"
 	"checkgo/OneService/internal/transport/http/handler"
 	"checkgo/OneService/internal/use_case"
+	"checkgo/observability/metrics"
+	"checkgo/observability/otel"
 	"context"
-	httpSwagger "github.com/swaggo/http-swagger"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -27,10 +29,21 @@ import (
 // @host localhost:8080
 // @BasePath /
 func Run(ctx context.Context) {
+	trace := otel.InitTracer(ctx)
+	if trace != nil {
+		slog.Error("OTel tracer initialized", "err", trace)
+	}
+	metric := metrics.InitMetrics(ctx)
+	if metric != nil {
+		slog.Info("OTel metrics initialized", "err", metric)
+	}
+
 	pg := postgres.NewPostgres(ctx)
 	pg.CreateTable(ctx)
 	cache := redis.NewRedisClient()
 	tx := postgres.NewTxManager(pg.Pool)
+	// Metrics
+	httpMetrics := metrics.NewHTTPServer()
 
 	producer, err := kafka.NewProducer()
 	if err != nil {
@@ -41,14 +54,14 @@ func Run(ctx context.Context) {
 
 	useCase := use_case.NewUseCase(pg, producer, cache, tx)
 	hu := handler.NewUserHandler(useCase)
-	userRouter := http2.NewRouter(hu)
+	router := http2.NewRouter(hu, httpMetrics)
 	outboxRunner := worker.NewOutboxKafka(useCase, *outboxCfg)
 
-	userRouter.Get("/swagger/*", httpSwagger.Handler(
-		httpSwagger.URL("http://localhost:8080/swagger/doc.json"),
-	))
-
-	httpServer := http_server.StartHttpServer(userRouter)
+	handler := otelhttp.NewHandler(
+		router,
+		"user-service",
+	)
+	httpServer := http_server.StartHttpServer(handler)
 	go grpc2.StartServer(ctx, useCase)
 
 	if err = outboxRunner.Run(ctx); err != nil {

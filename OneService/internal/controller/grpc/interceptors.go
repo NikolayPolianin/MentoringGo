@@ -5,6 +5,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"log"
 	"log/slog"
 )
@@ -20,7 +21,7 @@ func UnaryServerInterceptor(
 	if ok {
 		auth := md["authorization"]
 		if len(auth) == 0 {
-			return nil, grpc.Errorf(codes.Unauthenticated, "missing auth token")
+			return nil, status.Error(codes.Unauthenticated, "no auth")
 		}
 		slog.Info("UnaryServerInterceptor", "auth", auth)
 	}
