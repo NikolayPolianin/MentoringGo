@@ -2,6 +2,7 @@ package use_case
 
 import (
 	"checkgo/OneService/internal/domain"
+	"checkgo/observability/otel/tracer"
 	"context"
 	"encoding/json"
 	"errors"
@@ -56,9 +57,12 @@ func NewUseCase(db Pgg, producer Publisher, cache Cache, tx TxManager) *User {
 }
 
 func (u *User) CreateUser(ctx context.Context, user domain.User) (int64, error) {
+	ctx, span := tracer.Start(ctx, "UseCase.CreateUser")
+	defer span.End()
 	userId, err := u.db.CreateUser(ctx, user)
 	if err != nil {
-		slog.Error("Error creating user", "err", err)
+		span.RecordError(err)
+
 		return -1, err
 	}
 	user.Id = userId

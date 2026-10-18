@@ -4,6 +4,7 @@ import (
 	"checkgo/OneService/internal/domain"
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/redis/go-redis/v9"
 	"log/slog"
 	"time"
@@ -41,17 +42,24 @@ func (p *Redis) Ping() error {
 	return nil
 }
 func (p *Redis) GetUser(ctx context.Context, id string) (*domain.User, error) {
-	var user *domain.User
+	var user domain.User
 	cachedUser, err := p.client.Get(ctx, id).Bytes()
-	if err == nil && cachedUser != nil {
-		if err := json.Unmarshal(cachedUser, user); err != nil {
-			slog.Error("Error unmarshalling user", err)
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
 			return nil, err
 		}
-		return user, nil
+		return nil, err
+	}
+	if err := json.Unmarshal(cachedUser, &user); err != nil {
+		return nil, err
+	}
+
+	if user.Id == 0 {
+		p.client.Del(ctx, id)
+		return nil, nil
 	}
 	slog.Info("User found in Cache:", "id", id)
-	return user, nil
+	return &user, nil
 }
 func (p *Redis) SetUser(ctx context.Context, id string, user *domain.User) error {
 	data, err := json.Marshal(user)
