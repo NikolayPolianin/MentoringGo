@@ -2,10 +2,12 @@ package postgres
 
 import (
 	"checkgo/OneService/internal/domain"
+	"checkgo/observability/otel/tracer"
 	"context"
 	"fmt"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel/attribute"
 	"log/slog"
 	"time"
 )
@@ -48,6 +50,9 @@ func (p *Pg) CreateTable(ctx context.Context) {
 	}
 }
 func (p *Pg) CreateUser(ctx context.Context, user domain.User) (int64, error) {
+	ctx, span := tracer.Start(ctx, "Postgres.CreateUser")
+	defer span.End()
+
 	var id int64
 	query := `INSERT INTO users(Name,Age,Birthday,LocalDate) VALUES ($1,$2,$3,$4) RETURNING Id`
 
@@ -56,6 +61,7 @@ func (p *Pg) CreateUser(ctx context.Context, user domain.User) (int64, error) {
 		slog.Error("Error creating user", "err", err)
 		return 0, err
 	}
+	span.SetAttributes(attribute.Int64("Id", id))
 	return id, nil
 }
 func (p *Pg) GetUser(ctx context.Context, id int64) (domain.User, error) {

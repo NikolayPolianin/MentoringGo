@@ -4,11 +4,14 @@ import (
 	"checkgo/OneService/internal/domain"
 	"checkgo/OneService/internal/infrastructure/jwt"
 	"checkgo/OneService/internal/transport/http/response"
+	"checkgo/observability/otel/tracer"
 	"context"
 	"encoding/json"
 	"errors"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -38,15 +41,22 @@ func NewUserHandler(useCase UseCase) *UserHandler {
 // @Failure 500 {string} string
 // @Router /api/v1/users [post]
 func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	ctx, span := tracer.Start(r.Context(), "handler.CreateUser")
+	defer span.End()
 	var user domain.User
 
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		slog.Warn("Error Parsing userBody: ", r.Body)
 	}
-
-	id, err := h.u.CreateUser(r.Context(), user)
+	span.SetAttributes(attribute.String("name", user.Name), attribute.Int("age", user.Age))
+	id, err := h.u.CreateUser(ctx, user)
 	if err != nil {
-		slog.Warn("Error in CreateUser: ", r.Body)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+
+		slog.Error("Error Creating User: ", r.Body, "traceId:", span.SpanContext().TraceID().String())
 		response.Error(w, 400, "Error in CreateUser")
 		return
 	}
@@ -74,11 +84,9 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 	user, err := h.u.GetUser(r.Context(), Id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			slog.Warn("Error in GetUser: ", r.Body)
 			response.Error(w, http.StatusNotFound, "User not found")
 			return
 		}
-
 		slog.Warn("Error in GetUser: ", r.Body)
 		response.Error(w, http.StatusInternalServerError, "Internal server error")
 	}

@@ -2,23 +2,36 @@ package use_case
 
 import (
 	"checkgo/OneService/internal/domain"
+	"checkgo/observability/otel/tracer"
 	"context"
 	"encoding/json"
 	"errors"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/redis/go-redis/v9"
 	"log/slog"
 	"strconv"
 )
+
+type DBTX interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
 
 //go:generate mockgen -source=user_test.go -destination=mocks/mocks.go -package=mocks
 type Pgg interface {
 	CreateUser(ctx context.Context, user domain.User) (int64, error)
 	GetUser(ctx context.Context, id int64) (domain.User, error)
 
-	ReadOutbox(ctx context.Context, limit int) ([]*domain.Event, error)
+	ReadOutbox(ctx context.Context, db DBTX, limit int) ([]*domain.Event, error)
 	SaveOutbox(ctx context.Context, event ...domain.Event) error
-	DeleteFromOutbox(ctx context.Context) error
+	DeleteFromOutbox(ctx context.Context, db DBTX) error
+}
+
+type TxManager interface {
+	WithTransaction(ctx context.Context, fn func(tx pgx.Tx) error) error
 }
 
 //go:generate mockgen -source=user_test.go -destination=mocks/mocks.go -package=mocks
@@ -36,16 +49,20 @@ type User struct {
 	db       Pgg
 	producer Publisher
 	cache    Cache
+	tx       TxManager
 }
 
-func NewUseCase(db Pgg, producer Publisher, cache Cache) *User {
-	return &User{db, producer, cache}
+func NewUseCase(db Pgg, producer Publisher, cache Cache, tx TxManager) *User {
+	return &User{db, producer, cache, tx}
 }
 
 func (u *User) CreateUser(ctx context.Context, user domain.User) (int64, error) {
+	ctx, span := tracer.Start(ctx, "UseCase.CreateUser")
+	defer span.End()
 	userId, err := u.db.CreateUser(ctx, user)
 	if err != nil {
-		slog.Error("Error creating user", "err", err)
+		span.RecordError(err)
+
 		return -1, err
 	}
 	user.Id = userId
